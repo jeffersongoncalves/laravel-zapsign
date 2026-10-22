@@ -1,0 +1,75 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        if (! Schema::hasTable('zapsign_documents')) {
+            Schema::create('zapsign_documents', function (Blueprint $table) {
+                $table->id();
+                $table->string('token')->unique();
+                // String keys so the linked model can use int, UUID or ULID ids.
+                $table->string('documentable_type')->nullable();
+                $table->string('documentable_id')->nullable();
+                $table->string('external_id')->nullable()->index();
+                $table->string('name')->nullable();
+                $table->string('status', 20)->default('pending')->index();
+                $table->boolean('sandbox')->default(false);
+                $table->text('original_file')->nullable();
+                $table->text('signed_file')->nullable();
+                $table->string('signed_file_path')->nullable();
+                $table->text('rejected_reason')->nullable();
+                $table->timestamp('finished_at')->nullable();
+                $table->json('payload')->nullable();
+                $table->timestamps();
+                $table->softDeletes();
+
+                $table->index(['documentable_type', 'documentable_id']);
+            });
+        }
+
+        if (! Schema::hasTable('zapsign_signers')) {
+            Schema::create('zapsign_signers', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('document_id')->constrained('zapsign_documents')->cascadeOnDelete();
+                $table->string('token')->unique();
+                $table->string('external_id')->nullable();
+                $table->string('name')->nullable();
+                $table->string('email')->nullable();
+                $table->string('phone')->nullable();
+                $table->string('status', 30)->nullable();
+                $table->text('sign_url')->nullable();
+                $table->unsignedInteger('times_viewed')->default(0);
+                $table->timestamp('last_view_at')->nullable();
+                $table->timestamp('signed_at')->nullable();
+                $table->json('payload')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! Schema::hasTable('zapsign_webhook_calls')) {
+            Schema::create('zapsign_webhook_calls', function (Blueprint $table) {
+                $table->id();
+                // ZapSign sends no event id: sha1 of the raw body dedupes redeliveries.
+                $table->string('hash', 40)->unique();
+                $table->string('event_type')->index();
+                $table->string('document_token')->nullable()->index();
+                $table->json('payload');
+                $table->timestamp('processed_at')->nullable();
+                $table->text('exception')->nullable();
+                $table->timestamps();
+            });
+        }
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('zapsign_webhook_calls');
+        Schema::dropIfExists('zapsign_signers');
+        Schema::dropIfExists('zapsign_documents');
+    }
+};
